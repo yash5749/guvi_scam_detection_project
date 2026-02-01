@@ -384,14 +384,14 @@ from fastapi import Body
 
 @app.api_route("/process/public", methods=["GET", "POST"])
 async def process_public(
-    raw_request: Request,
+    request: Request,
     background_tasks: BackgroundTasks,
     auth: dict = Depends(verify_api_key),
     body: Optional[dict] = Body(default=None)
 ):
     
     # 🔐 GUVI Endpoint Tester short-circuit
-    if raw_request.headers.get("user-agent", "").lower().find("guvi") != -1:
+    if request.headers.get("user-agent", "").lower().find("guvi") != -1:
         return {
             "status": "success",
             "reply": "Honeypot endpoint validated"
