@@ -1,28 +1,15 @@
-# 📁 scam_detection_project/api/server.py - COMPLETE HACKATHON VERSION
+# server.py — PS-compliant, minimal, drop-in for evaluation
 from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-import sys
-import os
-import time
-import json
 import re
 import requests
-import uuid
+import json
 from datetime import datetime
 
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+app = FastAPI(title="Agentic Honeypot API", version="2.0.0")
 
-# ========== CREATE THE APP ==========
-app = FastAPI(
-    title="Agentic Honeypot API",
-    description="AI-powered scam detection and intelligence extraction system",
-    version="2.0.0"
-)
-
-# ========== CORS MIDDLEWARE ==========
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -31,7 +18,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ========== DATA MODELS ==========
+# ----------------- Models -----------------
 class Message(BaseModel):
     sender: str  # "scammer" or "user"
     text: str
@@ -49,8 +36,8 @@ class HoneypotRequest(BaseModel):
     metadata: Optional[Metadata] = None
 
 class HoneypotResponse(BaseModel):
-    status: str  # "success" or "error"
-    reply: str   # Agent's response message
+    status: str
+    reply: str
 
 class FinalResult(BaseModel):
     sessionId: str
@@ -59,7 +46,7 @@ class FinalResult(BaseModel):
     extractedIntelligence: Dict[str, List[str]]
     agentNotes: str
 
-# ========== SIMPLE AI MODULES ==========
+# ----------------- Simple detector -----------------
 class SimpleScamDetector:
     def __init__(self):
         self.scam_keywords = [
@@ -74,25 +61,15 @@ class SimpleScamDetector:
     
     def detect(self, text: str, conversation: List[Message]) -> Dict[str, Any]:
         text_lower = text.lower()
-        
-        # Check for scam keywords
         found_keywords = [word for word in self.scam_keywords if word in text_lower]
-        
-        # Check for urgency
         urgency_patterns = [r"urgent", r"immediate", r"emergency", r"now", r"asap"]
         urgency_score = sum(1 for pattern in urgency_patterns if re.search(pattern, text_lower))
-        
-        # Check for financial requests
         financial_patterns = [r"bank", r"account", r"upi", r"money", r"payment"]
         financial_score = sum(1 for pattern in financial_patterns if re.search(pattern, text_lower))
-        
-        # Calculate confidence
         keyword_score = len(found_keywords) / len(self.scam_keywords)
         total_score = (keyword_score * 0.5) + (urgency_score * 0.2) + (financial_score * 0.3)
-        
         is_scam = total_score > 0.3
         confidence = min(total_score * 100, 100)
-        
         return {
             "is_scam": is_scam,
             "confidence": round(confidence, 2),
@@ -100,6 +77,7 @@ class SimpleScamDetector:
             "risk_level": "HIGH" if confidence > 70 else "MEDIUM" if confidence > 40 else "LOW"
         }
 
+# ----------------- Extractor -----------------
 class IntelligentExtractor:
     def __init__(self):
         self.patterns = {
@@ -107,17 +85,15 @@ class IntelligentExtractor:
             "bankAccounts": [r'\b\d{9,18}\b', r'account\s*[:\.]?\s*(\d{9,18})'],
             "phishingLinks": [r'https?://[^\s]+', r'www\.[^\s]+'],
             "phoneNumbers": [r'\b\d{10}\b', r'\+\d{1,3}[- ]?\d{5,15}'],
+            # suspiciousKeywords will be filled from detector
             "suspiciousKeywords": []
         }
     
     def extract(self, text: str, conversation: List[Message]) -> Dict[str, List[str]]:
         result = {}
-        
         for key, patterns in self.patterns.items():
             if key == "suspiciousKeywords":
-                # Already handled by detector
                 continue
-            
             found_items = []
             for pattern in patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
@@ -126,12 +102,11 @@ class IntelligentExtractor:
                         match = match[0]
                     if match and match not in found_items:
                         found_items.append(match)
-            
             if found_items:
                 result[key] = found_items
-        
         return result
 
+# ----------------- Agent -----------------
 class HoneypotAgent:
     def __init__(self):
         self.personas = {
@@ -144,7 +119,6 @@ class HoneypotAgent:
                     "That sounds urgent! What should I do?",
                     "I need to be careful with my bank account..."
                 ],
-                "typing_pattern": "...",
                 "delay": 2.5
             },
             "student": {
@@ -156,7 +130,6 @@ class HoneypotAgent:
                     "Is this safe? I've heard about scams...",
                     "What information do you need from me?"
                 ],
-                "typing_pattern": "",
                 "delay": 1.0
             },
             "professional": {
@@ -168,27 +141,19 @@ class HoneypotAgent:
                     "Time is limited. Get to the point.",
                     "Send me the official instructions."
                 ],
-                "typing_pattern": "",
                 "delay": 0.5
             }
         }
-        
-        # Store conversation state by sessionId
         self.sessions = {}
     
-    def get_response(self, session_id: str, scammer_message: str, 
-                    conversation_history: List[Message], scam_type: str = "") -> Dict[str, Any]:
-        
-        # Initialize or get session
+    def get_response(self, session_id: str, scammer_message: str, conversation_history: List[Message], scam_type: str = "") -> Dict[str, Any]:
         if session_id not in self.sessions:
-            # Choose persona based on first message
             if "lottery" in scammer_message.lower() or "won" in scammer_message.lower():
                 persona = "elderly"
             elif "business" in scammer_message.lower() or "investment" in scammer_message.lower():
                 persona = "professional"
             else:
                 persona = "student"
-            
             self.sessions[session_id] = {
                 "persona": persona,
                 "message_count": 1,
@@ -198,44 +163,37 @@ class HoneypotAgent:
             }
         else:
             self.sessions[session_id]["message_count"] += 1
-        
+
         session = self.sessions[session_id]
         persona = session["persona"]
-        
-        # Generate response based on context
         response_pool = self.personas[persona]["responses"].copy()
-        
-        # Context-aware responses
+
         if any(word in scammer_message.lower() for word in ["bank", "account", "details"]):
             response_pool.extend([
                 "Which bank details do you need?",
                 "My account is with State Bank.",
                 "I'll need to check my account information."
             ])
-        
+
         if any(word in scammer_message.lower() for word in ["upi", "send money", "transfer"]):
             response_pool.extend([
                 "What UPI ID should I use?",
                 "How much money should I send?",
                 "Is there a minimum amount?"
             ])
-        
+
         if any(word in scammer_message.lower() for word in ["click", "link", "website"]):
             response_pool.extend([
                 "I'm not comfortable clicking links.",
                 "Can you tell me the website address?",
                 "My computer is very slow with websites."
             ])
-        
-        # Choose response
+
         import random
         response_text = random.choice(response_pool)
-        
-        # Add persona touch
         if persona == "elderly":
             response_text = f"Oh... {response_text}"
-        
-        # Update conversation
+
         session["conversation"].append({
             "sender": "scammer",
             "text": scammer_message,
@@ -246,58 +204,70 @@ class HoneypotAgent:
             "text": response_text,
             "timestamp": datetime.now().isoformat()
         })
-        
+
         return {
             "reply": response_text,
             "persona": persona,
             "message_count": session["message_count"]
         }
 
-# ========== INITIALIZE COMPONENTS ==========
+# ----------------- Initialize components -----------------
 detector = SimpleScamDetector()
 extractor = IntelligentExtractor()
 agent = HoneypotAgent()
 
-# ========== API KEYS ==========
+# ----------------- API keys -----------------
 VALID_API_KEYS = {
     "hackathon_key_2024": "hackathon_participant",
     "test_key_123": "tester",
     "admin_key": "administrator"
 }
 
-# ========== SESSION STORAGE ==========
+async def verify_api_key(x_api_key: str = Header(None, alias="x-api-key")):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="API key is missing")
+    if x_api_key not in VALID_API_KEYS:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+    return {"user": VALID_API_KEYS[x_api_key]}
+
+# ----------------- Session storage -----------------
 class SessionStorage:
     def __init__(self):
-        self.sessions = {}  # session_id -> session_data
-    
+        self.sessions = {}
+
     def get_session(self, session_id: str):
         return self.sessions.get(session_id, {
             "scam_detected": False,
             "message_count": 0,
-            "extracted_intelligence": {},
+            "extracted_intelligence": {
+                "bankAccounts": [],
+                "upiIds": [],
+                "phishingLinks": [],
+                "phoneNumbers": [],
+                "suspiciousKeywords": []
+            },
             "agent_notes": "",
+            "final_sent": False,
+            "initialized": False,
             "start_time": datetime.now().isoformat()
         })
-    
+
     def update_session(self, session_id: str, data: dict):
         if session_id not in self.sessions:
             self.sessions[session_id] = data
         else:
             self.sessions[session_id].update(data)
-    
+
     def get_all_intelligence(self, session_id: str):
         session = self.get_session(session_id)
         return session.get("extracted_intelligence", {})
 
 storage = SessionStorage()
 
-# ========== FINAL RESULT CALLBACK ==========
-async def send_final_result(session_id: str, scam_detected: bool):
-    """Send final results to GUVI evaluation endpoint"""
+# ----------------- Final callback -----------------
+def send_final_result(session_id: str, scam_detected: bool):
     try:
         session = storage.get_session(session_id)
-        
-        # Prepare payload
         payload = {
             "sessionId": session_id,
             "scamDetected": scam_detected,
@@ -311,104 +281,105 @@ async def send_final_result(session_id: str, scam_detected: bool):
             }),
             "agentNotes": session.get("agent_notes", "Scammer used urgency tactics")
         }
-        
-        # Send to GUVI endpoint (commented for testing, uncomment for actual submission)
-        # response = requests.post(
-        #     "https://hackathon.guvi.in/api/updateHoneyPotFinalResult",
-        #     json=payload,
-        #     timeout=5
-        # )
-        
-        # For now, just log it
-        print(f"📤 Would send final result for session {session_id}:")
-        print(json.dumps(payload, indent=2))
-        
+        # Required call for evaluation
+        response = requests.post(
+            "https://hackathon.guvi.in/api/updateHoneyPotFinalResult",
+            json=payload,
+            timeout=5
+        )
+        print(f"📤 Sent final result for session {session_id}, status: {response.status_code}")
         return True
     except Exception as e:
-        print(f"❌ Error sending final result: {e}")
+        print(f"❌ Error sending final result for session {session_id}: {e}")
         return False
 
-# ========== AUTHENTICATION ==========
-async def verify_api_key(x_api_key: str = Header(None, alias="x-api-key")):
-    if not x_api_key:
-        raise HTTPException(status_code=401, detail="API key is missing")
-    
-    if x_api_key not in VALID_API_KEYS:
-        raise HTTPException(
-            status_code=401,
-            detail=f"Invalid API key. Valid keys: {list(VALID_API_KEYS.keys())}"
-        )
-    
-    return {"user": VALID_API_KEYS[x_api_key]}
-
-# ========== MAIN ENDPOINT ==========
-@app.post("/honeypot", response_model=HoneypotResponse)
-async def honeypot_endpoint(
+# ----------------- Main endpoint (PS required path) -----------------
+@app.post("/process/public", response_model=HoneypotResponse)
+async def process_public(
     request: HoneypotRequest,
     background_tasks: BackgroundTasks,
     auth: dict = Depends(verify_api_key)
 ):
-    """
-    Main honeypot endpoint that accepts GUVI's format
-    and returns agent responses.
-    """
-    
-    # Get current message
-    current_message = request.message.text
     session_id = request.sessionId
-    
-    # Get conversation history
     all_messages = request.conversationHistory + [request.message]
-    
-    # 1. Detect scam
-    detection_result = detector.detect(current_message, all_messages)
-    is_scam = detection_result["is_scam"]
-    
-    # Update session
+
+    # Load or initialize session
     current_session = storage.get_session(session_id)
-    current_session.update({
-        "scam_detected": is_scam or current_session.get("scam_detected", False),
-        "message_count": current_session.get("message_count", 0) + 1,
-        "agent_notes": f"Scam confidence: {detection_result['confidence']}%. Keywords: {detection_result['found_keywords']}"
+    if session_id not in storage.sessions:
+        storage.update_session(session_id, current_session)
+
+    # On first request, initialize message_count from conversationHistory
+    if not current_session.get("initialized", False):
+        current_session["message_count"] = len(request.conversationHistory)
+        current_session["initialized"] = True
+
+    # Count incoming message
+    current_session["message_count"] = current_session.get("message_count", 0) + 1
+
+    # Detect scam
+    detection_result = detector.detect(request.message.text, all_messages)
+    is_scam = detection_result["is_scam"]
+    current_session["scam_detected"] = is_scam or current_session.get("scam_detected", False)
+    current_session["agent_notes"] = f"Scam confidence: {detection_result['confidence']}%. Keywords: {detection_result['found_keywords']}"
+
+    # Extract intelligence from message
+    extracted = extractor.extract(request.message.text, all_messages)
+    existing_intel = current_session.get("extracted_intelligence", {
+        "bankAccounts": [],
+        "upiIds": [],
+        "phishingLinks": [],
+        "phoneNumbers": [],
+        "suspiciousKeywords": []
     })
-    
-    # 2. Extract intelligence
-    extracted = extractor.extract(current_message, all_messages)
-    
-    # Merge with existing intelligence
-    existing_intel = current_session.get("extracted_intelligence", {})
     for key, items in extracted.items():
         if key not in existing_intel:
             existing_intel[key] = []
         for item in items:
             if item not in existing_intel[key]:
                 existing_intel[key].append(item)
-    
+
+    # Add suspicious keywords from detector
+    existing_intel.setdefault("suspiciousKeywords", [])
+    for kw in detection_result.get("found_keywords", []):
+        if kw not in existing_intel["suspiciousKeywords"]:
+            existing_intel["suspiciousKeywords"].append(kw)
+
     current_session["extracted_intelligence"] = existing_intel
     storage.update_session(session_id, current_session)
-    
-    # 3. If scam detected and enough messages exchanged, send final result
-    if is_scam and current_session["message_count"] >= 5:
-        background_tasks.add_task(send_final_result, session_id, True)
-    
-    # 4. Generate agent response
-    scam_type = "lottery" if "won" in current_message.lower() else "phishing"
-    agent_response = agent.get_response(
-        session_id, 
-        current_message, 
-        all_messages,
-        scam_type
-    )
-    
-    return HoneypotResponse(
-        status="success",
-        reply=agent_response["reply"]
-    )
 
-# ========== TEST ENDPOINT ==========
+    # Activate agent only if scam detected
+    reply_text = ""
+    if current_session["scam_detected"]:
+        scam_type = "lottery" if "won" in request.message.text.lower() else "phishing"
+        agent_response = agent.get_response(session_id, request.message.text, all_messages, scam_type)
+        reply_text = agent_response["reply"]
+        # Count agent reply
+        current_session["message_count"] = current_session.get("message_count", 0) + 1
+        storage.update_session(session_id, current_session)
+    else:
+        reply_text = "OK"
+
+    # Final callback logic: once per session when conditions met
+    MIN_MESSAGES_FOR_FINAL = 10
+    if current_session.get("scam_detected") and current_session.get("message_count", 0) >= MIN_MESSAGES_FOR_FINAL and not current_session.get("final_sent"):
+        current_session["final_sent"] = True
+        storage.update_session(session_id, current_session)
+        background_tasks.add_task(send_final_result, session_id, True)
+
+    return HoneypotResponse(status="success", reply=reply_text)
+
+# ----------------- Keep old /honeypot for local testing (compat) -----------------
+@app.post("/honeypot", response_model=HoneypotResponse)
+async def honeypot_compat(
+    request: HoneypotRequest,
+    background_tasks: BackgroundTasks,
+    auth: dict = Depends(verify_api_key)
+):
+    return await process_public(request, background_tasks, auth)
+
+# ----------------- Support endpoints -----------------
 @app.get("/test-format")
 async def test_format():
-    """Example of expected request format"""
     return {
         "example_request": {
             "sessionId": "abc123-session-id",
@@ -430,10 +401,8 @@ async def test_format():
         }
     }
 
-# ========== SESSION INFO ENDPOINT ==========
 @app.get("/session/{session_id}")
 async def get_session_info(session_id: str, auth: dict = Depends(verify_api_key)):
-    """Get information about a session"""
     session = storage.get_session(session_id)
     return {
         "sessionId": session_id,
@@ -444,7 +413,6 @@ async def get_session_info(session_id: str, auth: dict = Depends(verify_api_key)
         "startTime": session.get("start_time", "")
     }
 
-# ========== HEALTH CHECK ==========
 @app.get("/health")
 async def health_check():
     return {
@@ -453,43 +421,22 @@ async def health_check():
         "version": "2.0.0",
         "timestamp": datetime.now().isoformat(),
         "endpoints": {
-            "POST /honeypot": "Main honeypot endpoint",
+            "POST /process/public": "Main honeypot endpoint (required)",
             "GET /session/{id}": "Get session info",
             "GET /test-format": "Example request format"
         }
     }
 
-# ========== MAIN ==========
 if __name__ == "__main__":
     import uvicorn
-    
     print("\n" + "="*70)
     print("🏆 AGENTIC HONEYPOT API - HACKATHON READY")
     print("="*70)
-    print("📡 Server: http://127.0.0.1:8000")
-    print("\n🔐 Authentication: Use 'x-api-key' header")
+    print("📡 Server: http://127.0.0.1:8002")
+    print("🔐 Authentication: Use 'x-api-key' header")
     print("🔑 Valid API Keys:")
     for key, user in VALID_API_KEYS.items():
         print(f"   • {key:25} → {user}")
-    
-    print("\n📋 Main Endpoint: POST /honeypot")
-    print("📝 Expected Request Format:")
-    print(json.dumps({
-        "sessionId": "unique-session-id",
-        "message": {
-            "sender": "scammer",
-            "text": "Your message here",
-            "timestamp": "2026-01-21T10:15:30Z"
-        },
-        "conversationHistory": [],
-        "metadata": {
-            "channel": "SMS",
-            "language": "English",
-            "locale": "IN"
-        }
-    }, indent=2))
-    
-    print("\n✅ Returns: {'status': 'success', 'reply': 'agent response'}")
+    print("\n📋 Main Endpoint: POST /process/public")
     print("="*70 + "\n")
-    
     uvicorn.run(app, host="0.0.0.0", port=8002)
