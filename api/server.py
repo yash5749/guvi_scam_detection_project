@@ -1,5 +1,5 @@
 # server.py — PS-compliant, minimal, drop-in for evaluation
-from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks, Request
+from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -294,91 +294,177 @@ def send_final_result(session_id: str, scam_detected: bool):
         return False
 
 # ----------------- Main endpoint (PS required path) -----------------
-@app.post("/process/public", response_model=HoneypotResponse)
+# @app.post("/process/public", response_model=HoneypotResponse)
+# async def process_public(
+#     raw_request: Request,
+#     background_tasks: BackgroundTasks,
+#     auth: dict = Depends(verify_api_key)
+# ):
+#     try:
+#         body = await raw_request.json()
+#     except Exception:
+#         # GUVI Endpoint Tester sends NO BODY
+#         return HoneypotResponse(
+#             status="success",
+#             reply="Endpoint reachable"
+#         )
+
+#     # Normal evaluation flow continues below
+#     request = HoneypotRequest(**body)
+
+#     session_id = request.sessionId
+#     all_messages = request.conversationHistory + [request.message]
+
+#     # Load or initialize session
+#     current_session = storage.get_session(session_id)
+#     if session_id not in storage.sessions:
+#         storage.update_session(session_id, current_session)
+
+#     # On first request, initialize message_count from conversationHistory
+#     if not current_session.get("initialized", False):
+#         current_session["message_count"] = len(request.conversationHistory)
+#         current_session["initialized"] = True
+
+#     # Count incoming message
+#     current_session["message_count"] = current_session.get("message_count", 0) + 1
+
+#     # Detect scam
+#     detection_result = detector.detect(request.message.text, all_messages)
+#     is_scam = detection_result["is_scam"]
+#     current_session["scam_detected"] = is_scam or current_session.get("scam_detected", False)
+#     current_session["agent_notes"] = f"Scam confidence: {detection_result['confidence']}%. Keywords: {detection_result['found_keywords']}"
+
+#     # Extract intelligence from message
+#     extracted = extractor.extract(request.message.text, all_messages)
+#     existing_intel = current_session.get("extracted_intelligence", {
+#         "bankAccounts": [],
+#         "upiIds": [],
+#         "phishingLinks": [],
+#         "phoneNumbers": [],
+#         "suspiciousKeywords": []
+#     })
+#     for key, items in extracted.items():
+#         if key not in existing_intel:
+#             existing_intel[key] = []
+#         for item in items:
+#             if item not in existing_intel[key]:
+#                 existing_intel[key].append(item)
+
+#     # Add suspicious keywords from detector
+#     existing_intel.setdefault("suspiciousKeywords", [])
+#     for kw in detection_result.get("found_keywords", []):
+#         if kw not in existing_intel["suspiciousKeywords"]:
+#             existing_intel["suspiciousKeywords"].append(kw)
+
+#     current_session["extracted_intelligence"] = existing_intel
+#     storage.update_session(session_id, current_session)
+
+#     # Activate agent only if scam detected
+#     reply_text = ""
+#     if current_session["scam_detected"]:
+#         scam_type = "lottery" if "won" in request.message.text.lower() else "phishing"
+#         agent_response = agent.get_response(session_id, request.message.text, all_messages, scam_type)
+#         reply_text = agent_response["reply"]
+#         # Count agent reply
+#         current_session["message_count"] = current_session.get("message_count", 0) + 1
+#         storage.update_session(session_id, current_session)
+#     else:
+#         reply_text = "OK"
+
+#     # Final callback logic: once per session when conditions met
+#     MIN_MESSAGES_FOR_FINAL = 10
+#     if current_session.get("scam_detected") and current_session.get("message_count", 0) >= MIN_MESSAGES_FOR_FINAL and not current_session.get("final_sent"):
+#         current_session["final_sent"] = True
+#         storage.update_session(session_id, current_session)
+#         background_tasks.add_task(send_final_result, session_id, True)
+
+#     return HoneypotResponse(status="success", reply=reply_text)
+
+from fastapi import Body
+
+@app.api_route("/process/public", methods=["GET", "POST"])
 async def process_public(
     raw_request: Request,
     background_tasks: BackgroundTasks,
-    auth: dict = Depends(verify_api_key)
+    auth: dict = Depends(verify_api_key),
+    body: Optional[dict] = Body(default=None)
 ):
-    try:
-        body = await raw_request.json()
-    except Exception:
-        # GUVI Endpoint Tester sends NO BODY
-        return HoneypotResponse(
-            status="success",
-            reply="Endpoint reachable"
-        )
+    # -------------------------
+    # GUVI Endpoint Tester case
+    # -------------------------
+    if body is None:
+        return {
+            "status": "success",
+            "reply": "Endpoint reachable"
+        }
 
-    # Normal evaluation flow continues below
-    request = HoneypotRequest(**body)
+    # -------------------------
+    # Real evaluation flow
+    # -------------------------
+    try:
+        request = HoneypotRequest(**body)
+    except Exception:
+        return {
+            "status": "error",
+            "reply": "Invalid request body"
+        }
 
     session_id = request.sessionId
     all_messages = request.conversationHistory + [request.message]
 
-    # Load or initialize session
     current_session = storage.get_session(session_id)
     if session_id not in storage.sessions:
         storage.update_session(session_id, current_session)
 
-    # On first request, initialize message_count from conversationHistory
     if not current_session.get("initialized", False):
         current_session["message_count"] = len(request.conversationHistory)
         current_session["initialized"] = True
 
-    # Count incoming message
-    current_session["message_count"] = current_session.get("message_count", 0) + 1
+    current_session["message_count"] += 1
 
-    # Detect scam
     detection_result = detector.detect(request.message.text, all_messages)
     is_scam = detection_result["is_scam"]
     current_session["scam_detected"] = is_scam or current_session.get("scam_detected", False)
-    current_session["agent_notes"] = f"Scam confidence: {detection_result['confidence']}%. Keywords: {detection_result['found_keywords']}"
 
-    # Extract intelligence from message
     extracted = extractor.extract(request.message.text, all_messages)
-    existing_intel = current_session.get("extracted_intelligence", {
-        "bankAccounts": [],
-        "upiIds": [],
-        "phishingLinks": [],
-        "phoneNumbers": [],
-        "suspiciousKeywords": []
-    })
-    for key, items in extracted.items():
-        if key not in existing_intel:
-            existing_intel[key] = []
-        for item in items:
-            if item not in existing_intel[key]:
-                existing_intel[key].append(item)
+    intel = current_session["extracted_intelligence"]
 
-    # Add suspicious keywords from detector
-    existing_intel.setdefault("suspiciousKeywords", [])
+    for k, v in extracted.items():
+        for item in v:
+            if item not in intel[k]:
+                intel[k].append(item)
+
     for kw in detection_result.get("found_keywords", []):
-        if kw not in existing_intel["suspiciousKeywords"]:
-            existing_intel["suspiciousKeywords"].append(kw)
+        if kw not in intel["suspiciousKeywords"]:
+            intel["suspiciousKeywords"].append(kw)
 
-    current_session["extracted_intelligence"] = existing_intel
+    current_session["agent_notes"] = f"Scam confidence: {detection_result['confidence']}%"
     storage.update_session(session_id, current_session)
 
-    # Activate agent only if scam detected
-    reply_text = ""
+    reply = "OK"
     if current_session["scam_detected"]:
-        scam_type = "lottery" if "won" in request.message.text.lower() else "phishing"
-        agent_response = agent.get_response(session_id, request.message.text, all_messages, scam_type)
-        reply_text = agent_response["reply"]
-        # Count agent reply
-        current_session["message_count"] = current_session.get("message_count", 0) + 1
-        storage.update_session(session_id, current_session)
-    else:
-        reply_text = "OK"
+        agent_resp = agent.get_response(
+            session_id,
+            request.message.text,
+            all_messages
+        )
+        reply = agent_resp["reply"]
+        current_session["message_count"] += 1
 
-    # Final callback logic: once per session when conditions met
-    MIN_MESSAGES_FOR_FINAL = 10
-    if current_session.get("scam_detected") and current_session.get("message_count", 0) >= MIN_MESSAGES_FOR_FINAL and not current_session.get("final_sent"):
+    if (
+        current_session["scam_detected"]
+        and current_session["message_count"] >= 10
+        and not current_session["final_sent"]
+    ):
         current_session["final_sent"] = True
         storage.update_session(session_id, current_session)
         background_tasks.add_task(send_final_result, session_id, True)
 
-    return HoneypotResponse(status="success", reply=reply_text)
+    return {
+        "status": "success",
+        "reply": reply
+    }
+
 
 # ----------------- Keep old /honeypot for local testing (compat) -----------------
 @app.post("/honeypot", response_model=HoneypotResponse)
