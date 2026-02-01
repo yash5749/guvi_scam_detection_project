@@ -391,7 +391,7 @@ async def process_public(
 ):
     
     # 🔐 GUVI Endpoint Tester short-circuit
-    if request.headers.get("user-agent", "").lower().find("guvi") != -1:
+    if raw_request.headers.get("user-agent", "").lower().find("guvi") != -1:
         return {
             "status": "success",
             "reply": "Honeypot endpoint validated"
