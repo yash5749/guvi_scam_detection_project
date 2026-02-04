@@ -522,7 +522,7 @@ async def get_session_info(session_id: str, auth: dict = Depends(verify_api_key)
         "startTime": session.get("start_time", "")
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     return {
         "status": "healthy",
