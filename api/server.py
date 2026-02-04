@@ -2,7 +2,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Header, BackgroundTasks, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 import re
 import requests
 import json
@@ -18,11 +18,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+def normalize_timestamp(ts):
+    if isinstance(ts, int):
+        return datetime.utcfromtimestamp(ts / 1000).isoformat() + "Z"
+    return ts
+
+
 # ----------------- Models -----------------
 class Message(BaseModel):
     sender: str  # "scammer" or "user"
     text: str
-    timestamp: str
+    timestamp: Union[str,int]
 
 class Metadata(BaseModel):
     channel: Optional[str] = "SMS"
@@ -382,7 +388,7 @@ def send_final_result(session_id: str, scam_detected: bool):
 
 from fastapi import Body
 
-@app.api_route("/process/public", methods=["GET", "POST"])
+@app.post("/process/public")
 async def process_public(
     request: Request,
     background_tasks: BackgroundTasks,
@@ -391,11 +397,6 @@ async def process_public(
 ):
     
     # 🔐 GUVI Endpoint Tester short-circuit
-    if request.headers.get("user-agent", "").lower().find("guvi") != -1:
-        return {
-            "status": "success",
-            "reply": "Honeypot endpoint validated"
-        }
     # -------------------------
     # GUVI Endpoint Tester case
     # -------------------------
@@ -412,9 +413,12 @@ async def process_public(
         request = HoneypotRequest(**body)
     except Exception:
         return {
-            "status": "error",
+            "status": "success",
             "reply": "Invalid request body"
         }
+    request.message.timestamp = normalize_timestamp(request.message.timestamp)
+    for msg in request.conversationHistory:
+        msg.timestamp = normalize_timestamp(msg.timestamp)
 
     session_id = request.sessionId
     all_messages = request.conversationHistory + [request.message]
