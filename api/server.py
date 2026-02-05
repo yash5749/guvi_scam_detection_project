@@ -538,7 +538,7 @@ async def process_public(
 
     if (
         current_session["scam_detected"]
-        and current_session["message_count"] >= 10
+        and current_session["message_count"] >= 17
         and not current_session["final_sent"]
     ):
         current_session["final_sent"] = True
