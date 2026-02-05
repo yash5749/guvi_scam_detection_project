@@ -84,33 +84,92 @@ class SimpleScamDetector:
         }
 
 # ----------------- Extractor -----------------
+# class IntelligentExtractor:
+#     def __init__(self):
+#         self.patterns = {
+#             "upiIds": [r'[\w\.-]+@(okicici|okhdfc|oksbi|okaxis|paytm|ybl|axl|upi)', r'[\w\.-]+@[\w]+'],
+#             "bankAccounts": [r'\b\d{9,18}\b', r'account\s*[:\.]?\s*(\d{9,18})'],
+#             "phishingLinks": [r'https?://[^\s]+', r'www\.[^\s]+'],
+#             "phoneNumbers": [r'\b\d{10}\b', r'\+\d{1,3}[- ]?\d{5,15}'],
+#             # suspiciousKeywords will be filled from detector
+#             "suspiciousKeywords": []
+#         }
+    
+#     def extract(self, text: str, conversation: List[Message]) -> Dict[str, List[str]]:
+#         result = {}
+#         for key, patterns in self.patterns.items():
+#             if key == "suspiciousKeywords":
+#                 continue
+#             found_items = []
+#             for pattern in patterns:
+#                 matches = re.findall(pattern, text, re.IGNORECASE)
+#                 for match in matches:
+#                     if isinstance(match, tuple):
+#                         match = match[0]
+#                     if match and match not in found_items:
+#                         found_items.append(match)
+#             if found_items:
+#                 result[key] = found_items
+#         return result
+
+# ----------------- Extractor -----------------
 class IntelligentExtractor:
     def __init__(self):
         self.patterns = {
-            "upiIds": [r'[\w\.-]+@(okicici|okhdfc|oksbi|okaxis|paytm|ybl|axl|upi)', r'[\w\.-]+@[\w]+'],
-            "bankAccounts": [r'\b\d{9,18}\b', r'account\s*[:\.]?\s*(\d{9,18})'],
-            "phishingLinks": [r'https?://[^\s]+', r'www\.[^\s]+'],
-            "phoneNumbers": [r'\b\d{10}\b', r'\+\d{1,3}[- ]?\d{5,15}'],
-            # suspiciousKeywords will be filled from detector
-            "suspiciousKeywords": []
+            # Capture ANY realistic UPI ID (including fakebank)
+            "upiIds": [
+                r'\b[a-zA-Z0-9.\-_]{2,}@[a-zA-Z]{2,}\b'
+            ],
+
+            # Capture account numbers properly
+            "bankAccounts": [
+                r'\b\d{9,18}\b',
+                r'account number\s*[:\-]?\s*(\d{9,18})'
+            ],
+
+            # Capture phishing links
+            "phishingLinks": [
+                r'https?://[^\s]+',
+                r'www\.[^\s]+'
+            ],
+
+            # Capture phone numbers
+            "phoneNumbers": [
+                r'\b\d{10}\b',
+                r'\+\d{1,3}[- ]?\d{5,15}'
+            ],
+
+            # Capture OTPs (bonus intelligence)
+            "otpCodes": [
+                r'\b\d{4,8}\b'
+            ]
         }
-    
+
     def extract(self, text: str, conversation: List[Message]) -> Dict[str, List[str]]:
         result = {}
+
         for key, patterns in self.patterns.items():
-            if key == "suspiciousKeywords":
-                continue
             found_items = []
+
             for pattern in patterns:
                 matches = re.findall(pattern, text, re.IGNORECASE)
+
                 for match in matches:
                     if isinstance(match, tuple):
                         match = match[0]
+
+                    # Ignore example junk
+                    if "yourname@bank" in str(match).lower():
+                        continue
+
                     if match and match not in found_items:
                         found_items.append(match)
+
             if found_items:
                 result[key] = found_items
+
         return result
+
 
 # ----------------- Agent -----------------
 class HoneypotAgent:
@@ -440,10 +499,25 @@ async def process_public(
     extracted = extractor.extract(request.message.text, all_messages)
     intel = current_session["extracted_intelligence"]
 
+    # for k, v in extracted.items():
+    #     for item in v:
+    #         if item not in intel[k]:
+    #             intel[k].append(item)
+    intel = current_session.get("extracted_intelligence", {})
+
     for k, v in extracted.items():
+        if k not in intel:
+            intel[k] = []
+
         for item in v:
             if item not in intel[k]:
                 intel[k].append(item)
+
+    # If OTP detected, add it as suspicious keyword
+    if "otpCodes" in intel:
+        for otp in intel["otpCodes"]:
+            if otp not in intel["suspiciousKeywords"]:
+                intel["suspiciousKeywords"].append(f"OTP:{otp}")
 
     for kw in detection_result.get("found_keywords", []):
         if kw not in intel["suspiciousKeywords"]:
