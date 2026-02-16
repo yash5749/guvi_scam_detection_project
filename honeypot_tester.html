@@ -1,414 +1,208 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>🏆 Honeypot Endpoint Tester</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .container {
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            width: 100%;
-            max-width: 800px;
-            overflow: hidden;
-        }
-        
-        .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-        
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
-        }
-        
-        .header p {
-            opacity: 0.9;
-            font-size: 1.1rem;
-        }
-        
-        .content {
-            padding: 30px;
-        }
-        
-        .step {
-            background: #f8f9fa;
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border-left: 5px solid #667eea;
-        }
-        
-        .step h3 {
-            color: #333;
-            margin-bottom: 15px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .step-number {
-            background: #667eea;
-            color: white;
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 600;
-        }
-        
-        input {
-            width: 100%;
-            padding: 15px;
-            border: 2px solid #e0e0e0;
-            border-radius: 10px;
-            font-size: 16px;
-            transition: border 0.3s;
-        }
-        
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-        
-        .test-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 18px 40px;
-            border-radius: 10px;
-            font-size: 18px;
-            font-weight: 600;
-            cursor: pointer;
-            display: block;
-            width: 100%;
-            margin-top: 20px;
-            transition: transform 0.3s;
-        }
-        
-        .test-button:hover {
-            transform: translateY(-2px);
-        }
-        
-        .test-button:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .result-box {
-            margin-top: 30px;
-            padding: 25px;
-            border-radius: 15px;
-            background: #f8f9fa;
-            display: none;
-        }
-        
-        .result-box.show {
-            display: block;
-            animation: slideIn 0.5s ease;
-        }
-        
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .status {
-            padding: 12px 20px;
-            border-radius: 10px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            display: inline-block;
-        }
-        
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        
-        .status.warning {
-            background: #fff3cd;
-            color: #856404;
-            border: 1px solid #ffeaa7;
-        }
-        
-        .result-details {
-            background: white;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-            font-family: monospace;
-            white-space: pre-wrap;
-            overflow-x: auto;
-        }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            margin: 20px 0;
-        }
-        
-        .loading.show {
-            display: block;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 15px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .note {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 20px;
-            color: #856404;
-        }
-        
-        .note h4 {
-            margin-bottom: 10px;
-            color: #856404;
-        }
-        
-        footer {
-            text-align: center;
-            padding: 20px;
-            color: #666;
-            font-size: 0.9rem;
-            border-top: 1px solid #eee;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🔐 Honeypot Endpoint Tester</h1>
-            <p>Validate your honeypot API deployment before submission</p>
-        </div>
-        
-        <div class="content">
-            <div class="step">
-                <h3><span class="step-number">1</span> Enter Your Deployment Details</h3>
-                <div class="form-group">
-                    <label for="endpoint">Honeypot API Endpoint URL:</label>
-                    <input type="url" id="endpoint" placeholder="https://your-api.com/process" value="http://127.0.0.1:8002/process">
-                </div>
-                
-                <div class="form-group">
-                    <label for="apiKey">API Key (if required):</label>
-                    <input type="text" id="apiKey" placeholder="Enter your API key here">
-                </div>
-                
-                <div class="form-group">
-                    <label for="testMessage">Test Scam Message:</label>
-                    <input type="text" id="testMessage" placeholder="You won $1,000,000! Send bank details" value="You won $1,000,000! Send bank details to UPI: scam@bank">
-                </div>
-            </div>
-            
-            <div class="step">
-                <h3><span class="step-number">2</span> What This Tests</h3>
-                <ul style="padding-left: 20px; color: #555; line-height: 1.8;">
-                    <li>✅ API authentication using headers</li>
-                    <li>✅ Endpoint availability and connectivity</li>
-                    <li>✅ Proper request handling</li>
-                    <li>✅ Response structure and status codes</li>
-                    <li>✅ Basic honeypot behavior validation</li>
-                </ul>
-            </div>
-            
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
-                <p>Testing your honeypot endpoint...</p>
-            </div>
-            
-            <button class="test-button" id="testButton" onclick="testEndpoint()">
-                🚀 Test Honeypot Endpoint
-            </button>
-            
-            <div class="result-box" id="resultBox">
-                <div id="statusMessage"></div>
-                <div class="result-details" id="resultDetails"></div>
-            </div>
-            
-            <div class="note">
-                <h4>📝 Note:</h4>
-                <p>This tester is for validation only. The final evaluation will involve automated security interaction scenarios.</p>
-            </div>
-        </div>
-        
-        <footer>
-            <p>Agentic Honeypot for Scam Detection & Intelligence Extraction | Hackathon Submission Tool</p>
-        </footer>
-    </div>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Honeypot Multi-Message Tester</title>
 
-    <script>
-        async function testEndpoint() {
-            const endpoint = document.getElementById('endpoint').value;
-            const apiKey = document.getElementById('apiKey').value;
-            const testMessage = document.getElementById('testMessage').value;
-            
-            if (!endpoint) {
-                alert('Please enter your API endpoint URL');
-                return;
-            }
-            
-            // Show loading
-            document.getElementById('loading').classList.add('show');
-            document.getElementById('testButton').disabled = true;
-            document.getElementById('resultBox').classList.remove('show');
-            
-            try {
-                // Prepare request
-                const requestBody = {
-                    message: testMessage,
-                    scammer_id: "honeypot_tester_" + Date.now(),
-                    persona: "elderly"
-                };
-                
-                const headers = {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                };
-                
-                // Add API key if provided
-                if (apiKey) {
-                    headers['X-API-Key'] = apiKey;
-                    headers['Authorization'] = `Bearer ${apiKey}`;
-                }
-                
-                // Make request
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: headers,
-                    body: JSON.stringify(requestBody)
-                });
-                
-                // Parse response
-                const data = await response.json();
-                const status = response.status;
-                
-                // Display results
-                const resultBox = document.getElementById('resultBox');
-                const statusMessage = document.getElementById('statusMessage');
-                const resultDetails = document.getElementById('resultDetails');
-                
-                resultBox.classList.add('show');
-                
-                if (status >= 200 && status < 300) {
-                    statusMessage.innerHTML = `
-                        <div class="status success">
-                            ✅ SUCCESS! Endpoint is working properly
-                        </div>
-                        <p><strong>Status Code:</strong> ${status}</p>
-                        <p><strong>Response Time:</strong> Calculated on server</p>
-                    `;
-                } else if (status === 401 || status === 403) {
-                    statusMessage.innerHTML = `
-                        <div class="status warning">
-                            ⚠️ AUTHENTICATION REQUIRED
-                        </div>
-                        <p><strong>Status Code:</strong> ${status}</p>
-                        <p><strong>Message:</strong> Authentication failed or missing</p>
-                        <p><em>Note: This may be expected if your API requires specific authentication</em></p>
-                    `;
-                } else {
-                    statusMessage.innerHTML = `
-                        <div class="status error">
-                            ❌ ERROR: Endpoint returned ${status}
-                        </div>
-                        <p><strong>Status Code:</strong> ${status}</p>
-                    `;
-                }
-                
-                // Show detailed response
-                resultDetails.textContent = JSON.stringify(data, null, 2);
-                
-            } catch (error) {
-                // Display error
-                const resultBox = document.getElementById('resultBox');
-                const statusMessage = document.getElementById('statusMessage');
-                const resultDetails = document.getElementById('resultDetails');
-                
-                resultBox.classList.add('show');
-                
-                statusMessage.innerHTML = `
-                    <div class="status error">
-                        ❌ CONNECTION FAILED
-                    </div>
-                    <p><strong>Error:</strong> ${error.message}</p>
-                    <p><em>Check if your server is running and accessible</em></p>
-                `;
-                
-                resultDetails.textContent = `Error details: ${error.stack || error}`;
-                
-            } finally {
-                // Hide loading
-                document.getElementById('loading').classList.remove('show');
-                document.getElementById('testButton').disabled = false;
-            }
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6fb;
+      padding: 30px;
+    }
+
+    .card {
+      max-width: 800px;
+      margin: auto;
+      background: white;
+      padding: 25px;
+      border-radius: 12px;
+      box-shadow: 0 0 25px rgba(0,0,0,0.15);
+    }
+
+    h2 {
+      margin-bottom: 20px;
+    }
+
+    label {
+      font-weight: bold;
+      display: block;
+      margin-top: 15px;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 12px;
+      margin-top: 8px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 15px;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 15px;
+      background: #4a63f5;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #3648d6;
+    }
+
+    pre {
+      background: #111;
+      color: #0f0;
+      padding: 15px;
+      border-radius: 10px;
+      margin-top: 20px;
+      overflow-x: auto;
+      height: 300px;
+      overflow-y: scroll;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <h2>🔐 Honeypot Multi-Turn Conversation Tester</h2>
+
+    <!-- Endpoint -->
+    <label>API Endpoint</label>
+    <input
+      id="endpoint"
+      value=" https://guvi-scam-detection-project.onrender.com/process/public"
+    />
+
+    <!-- API Key -->
+    <label>API Key</label>
+    <input
+      id="apiKey"
+      value="hackathon_key_2024"
+    />
+
+    <!-- Session ID -->
+    <label>Session ID</label>
+    <input
+      id="sessionId"
+      value="session_multi_test"
+    />
+
+    <!-- Start Button -->
+    <button onclick="runConversation()">
+      🚀 Start Automated Scam Conversation
+    </button>
+
+    <!-- Output -->
+    <pre id="output">Conversation output will appear here...</pre>
+  </div>
+
+  <script>
+    function log(msg) {
+      const output = document.getElementById("output");
+      output.textContent += msg + "\n";
+      output.scrollTop = output.scrollHeight;
+    }
+
+    // ✅ Scam Conversation Script (15 messages)
+    const scamMessages = [
+      "Hello sir, you won ₹10,00,000 lottery prize!",
+      "To claim, send your bank account details immediately.",
+      "Your account will be blocked if you don’t verify now.",
+      "Pay a small processing fee of ₹500 first.",
+      "Send money to UPI: scam@bank",
+      "Click this link to update details: http://fakebank-login.com",
+      "Share OTP sent to your phone for confirmation.",
+      "Urgent! Only 10 minutes left.",
+      "We are from RBI support team.",
+      "Transfer ₹2000 now to release funds.",
+      "Confirm your Aadhaar-linked mobile number.",
+      "Your reward is waiting. Don’t delay.",
+      "Final warning: account suspension soon.",
+      "Send UPI immediately: fraud@ybl",
+      "Thank you. Payment required again."
+    ];
+
+    async function runConversation() {
+      const endpoint = document.getElementById("endpoint").value;
+      const apiKey = document.getElementById("apiKey").value;
+      const sessionId = document.getElementById("sessionId").value;
+
+      let conversationHistory = [];
+
+      log("🚀 Starting automated scam conversation...\n");
+
+      for (let i = 0; i < 9; i++) {
+        const scamText = scamMessages[i];
+
+        // Build request body
+        const requestBody = {
+          sessionId: sessionId,
+
+          message: {
+            sender: "scammer",
+            text: scamText,
+            timestamp: Date.now()
+          },
+
+          conversationHistory: conversationHistory,
+
+          metadata: {
+            channel: "SMS",
+            language: "English",
+            locale: "IN"
+          }
+        };
+
+        log("📨 Scammer: " + scamText);
+
+        try {
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "x-api-key": apiKey
+            },
+            body: JSON.stringify(requestBody)
+          });
+
+          const data = await response.json();
+
+          log("🤖 Agent Reply: " + data.reply);
+          log("--------------------------------------------------");
+
+          // Update conversation history
+          conversationHistory.push({
+            sender: "scammer",
+            text: scamText,
+            timestamp: Date.now()
+          });
+
+          conversationHistory.push({
+            sender: "agent",
+            text: data.reply,
+            timestamp: Date.now()
+          });
+
+          // Delay between messages (simulate real chat)
+          await new Promise(resolve => setTimeout(resolve, 800));
+
+        } catch (err) {
+          log("❌ Error: " + err.message);
+          break;
         }
-        
-        // Allow pressing Enter to test
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                testEndpoint();
-            }
-        });
-    </script>
+      }
+
+      log("\n✅ Conversation finished. Check backend final callback.");
+    }
+  </script>
 </body>
 </html>
