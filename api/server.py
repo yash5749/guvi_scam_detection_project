@@ -362,7 +362,7 @@ async def session_info(session_id: str, auth: dict = Depends(verify_api_key)):
 # ============================================================
 
 @app.head("/health")
-async def health(auth: dict = Depends(verify_api_key)):
+async def health():
     return {
         "status": "healthy",
         "service": "Agentic Honeypot API",
