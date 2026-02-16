@@ -361,7 +361,7 @@ async def session_info(session_id: str, auth: dict = Depends(verify_api_key)):
 # Health
 # ============================================================
 
-@app.get("/health")
+@app.head("/health")
 async def health(auth: dict = Depends(verify_api_key)):
     return {
         "status": "healthy",
