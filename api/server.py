@@ -811,16 +811,38 @@ def send_final_result(session_id: str):
             .total_seconds()
         )
 
+        # -------- SAFE NORMALIZATION --------
+        def extract_value(item):
+            """Normalize IntelligenceItem / dict / raw value safely"""
+            if isinstance(item, dict):
+                return item.get("value", item)
+            if hasattr(item, "value"):
+                return item.value
+            return item
+
         # Convert enhanced intelligence to expected format
         extracted_intel = {}
         for key in DEFAULT_INTEL.keys():
-            # Extract just the values from IntelligenceItem objects
-            if key in session["extracted_intelligence"]:
-                items = session["extracted_intelligence"][key]
-                extracted_intel[key] = [item.value if isinstance(item, dict) or hasattr(item, 'value') else item 
-                                       for item in items]
-            else:
-                extracted_intel[key] = []
+            items = session.get("extracted_intelligence", {}).get(key, [])
+            extracted_intel[key] = [extract_value(item) for item in items]
+
+        # -------- SAFE RED FLAGS --------
+        red_flag_types = []
+        for rf in session.get("red_flags", []):
+            try:
+                if hasattr(rf, "type"):
+                    t = rf.type
+                    red_flag_types.append(t.value if hasattr(t, "value") else t)
+                else:
+                    red_flag_types.append(rf)
+            except Exception:
+                red_flag_types.append(str(rf))
+
+        # -------- SAFE SCAM TYPE --------
+        scam_type_obj = session.get("scam_type", ScamType.UNKNOWN)
+        scam_type_value = (
+            scam_type_obj.value if hasattr(scam_type_obj, "value") else scam_type_obj
+        )
 
         payload = {
             "status": "completed",
@@ -833,22 +855,29 @@ def send_final_result(session_id: str):
                 "engagementDurationSeconds": duration,
                 "questionsAsked": len(session.get("questions_asked", [])),
                 "redFlagsIdentified": len(session.get("red_flags", [])),
-                "scamType": session.get("scam_type", ScamType.UNKNOWN).value
+                "scamType": scam_type_value,
             },
-            "agentNotes": f"{session['agent_notes']}\nRed Flags: {[rf.type.value for rf in session.get('red_flags', [])]}\nScam Type: {session.get('scam_type', ScamType.UNKNOWN).value}"
+            "agentNotes": (
+                f"{session['agent_notes']}\n"
+                f"Red Flags: {red_flag_types}\n"
+                f"Scam Type: {scam_type_value}"
+            ),
         }
 
         logger.info(f"Sending final result for session {session_id}")
         r = requests.post(EVALUATOR_ENDPOINT, json=payload, timeout=8)
-        
+
         if r.status_code == 200:
             logger.info(f"✅ Final result sent successfully for {session_id}")
         else:
-            logger.warning(f"⚠️ Final result sent with status {r.status_code} for {session_id}")
-            
+            logger.warning(
+                f"⚠️ Final result sent with status {r.status_code} for {session_id}"
+            )
+
     except Exception as e:
         logger.error(f"❌ Final callback failed for {session_id}: {str(e)}")
         logger.error(traceback.format_exc())
+
 
 # ============================================================
 # MAIN ENDPOINT (Hackathon Required)
